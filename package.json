@@ -2,6 +2,7 @@
 	"name": "find-unused",
 	"displayName": "Find Unused",
 	"description": "Find unused static resource, and delete them. ",
+	"publisher": "winnnntttter",
 	"version": "0.0.1",
 	"engines": {
 		"vscode": "^1.41.0"
