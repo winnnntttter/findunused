@@ -3,9 +3,8 @@ const path = require("path");
 let basePath;
 const vscode = require("vscode");
 const fileFilter = function(ele) {
-  return ele === "node_modules" || ele === ".git" || ele === ".vscode" || ele === "findunuse.js" || ele === "output.txt" || ele === "deleteFile.js";
+  return ele.match(/node_modules|\.git|\.vscode|\.gitignore|\.eslintrc|package\.json|package-lock\.json|gulp\.js|webpack\.config\.js/);
 };
-
 let flag = true,
   resultText = "",
   L = 0,
@@ -22,7 +21,7 @@ function findMatch(pa, fileName) {
         if (fs.statSync(pathTemp).isDirectory()) {
           findMatch(pathTemp, fileName);
         } else {
-          if (!ele.match(/\.html|\.js|\.css/)) {
+          if (!ele.match(/\.html|\.js|\.css|\.less|\.vue|\.jsx|\.sass|\.scss/)) {
             return;
           } else {
             let fileContent = fs.readFileSync(pathTemp, "utf-8"); // 读取页面内容
@@ -53,7 +52,7 @@ function readDir(pa) {
             // 文件夹则进入下一层
             readDir(fileNow);
           } else {
-            if (ele.match(/\.html/)) {
+            if (ele.match(/\.html|\.vue|\.jsx|\.jsp/)) {
               return;
             } else {
               flag = true;
