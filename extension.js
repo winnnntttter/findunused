@@ -63,15 +63,15 @@ function readDir(pa) {
               flag = true;
               findMatch(basePath, ele);
               if (flag) {
-                resultText += fileNow + "\n";
+                resultText += "file:///" + fileNow + "\n";
                 /* var a= fs.createWriteStream(path.join(basePath,'output.txt'))
                 a.write(resultText) */
                 if (L2 === L) {
-                  fs.writeFile(path.join(basePath, "unused.txt"), resultText, function(err) {
-                    vscode.workspace.openTextDocument(path.join(basePath, "unused.txt"));
+                  fs.writeFile(path.join(basePath, "unused.md"), resultText, function(err) {
+                    vscode.workspace.openTextDocument(path.join(basePath, "unused.md")).then(doc => vscode.window.showTextDocument(doc));
                     if (err) throw err;
                   });
-                  vscode.window.showInformationMessage("请仔细核对unused.txt中列出的文件，确认后执行删除命令。");
+                  vscode.window.showInformationMessage("请仔细核对unused.md中列出的文件，确认后执行删除命令。");
                 }
               }
             }
@@ -122,6 +122,7 @@ function activate(context) {
           readDir(basePath);
           var p = new Promise(resolve => {
             let timer = setInterval(() => {
+              // console.log((L2 / L) * 100);
               if (L2 < L) {
                 progress.report({ increment: (L2 / L) * 100, message: "searching..." });
               } else {
@@ -140,12 +141,15 @@ function activate(context) {
   vscode.commands.registerCommand("findUnused.delete", function() {
     if (vscode.workspace.workspaceFolders.length === 1) {
       basePath = vscode.workspace.workspaceFolders[0].uri.fsPath;
-      fs.exists(path.join(basePath, "unused.txt"), function(exists) {
+      fs.exists(path.join(basePath, "unused.md"), function(exists) {
         if (exists) {
-          vscode.window.showInputBox({ prompt: "Find Unused: 请输入'yes'以删除unused.txt中查询到的无用文件。" }).then(function(text) {
+          vscode.window.showInputBox({ prompt: "Find Unused: 请输入'yes'以删除unused.md中查询到的无用文件。" }).then(function(text) {
             if (text === "yes") {
-              let unusedFiles = path.join(basePath, "unused.txt");
-              let fileContentArr = fs.readFileSync(unusedFiles, "utf-8").split("\n");
+              let unusedFiles = path.join(basePath, "unused.md");
+              let fileContentArr = fs
+                .readFileSync(unusedFiles, "utf-8")
+                .replace(/file:\/\/\//gm, "")
+                .split("\n");
               fileContentArr.forEach(file => {
                 if (file) {
                   fs.unlink(file, err => {
@@ -156,7 +160,7 @@ function activate(context) {
             }
           });
         } else {
-          vscode.window.showErrorMessage("当前工作区根路径不存在unused.txt!");
+          vscode.window.showErrorMessage("当前工作区根路径不存在unused.md!");
         }
       });
     } else {
