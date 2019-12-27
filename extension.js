@@ -8,7 +8,9 @@ const fileFilter = function(ele) {
 let flag = true,
   resultText = "",
   L = 0,
-  L2 = 0;
+  L2 = 0,
+  notiMsg = "",
+  progressFlag = true;
 function findMatch(pa, fileName) {
   var menu = fs.readdirSync(pa);
   if (menu) {
@@ -38,10 +40,13 @@ function findMatch(pa, fileName) {
 }
 function readDir(pa) {
   fs.readdir(pa, (err, menu) => {
+    if (!progressFlag) return;
     if (err) throw err;
     if (!menu) return;
-    L2 += menu.length;
     menu.forEach(ele => {
+      L2 += 1;
+      notiMsg = path.join(pa, ele);
+      // console.log(L2, path.join(pa, ele));
       if (fileFilter(ele)) {
         return;
       } else {
@@ -62,8 +67,8 @@ function readDir(pa) {
                 /* var a= fs.createWriteStream(path.join(basePath,'output.txt'))
                 a.write(resultText) */
                 if (L2 === L) {
-                  console.log("done!");
                   fs.writeFile(path.join(basePath, "unused.txt"), resultText, function(err) {
+                    vscode.workspace.openTextDocument(path.join(basePath, "unused.txt"));
                     if (err) throw err;
                   });
                   vscode.window.showInformationMessage("请仔细核对unused.txt中列出的文件，确认后执行删除命令。");
@@ -97,9 +102,37 @@ function getAllLength(pa) {
 function activate(context) {
   vscode.commands.registerCommand("findUnused.find", function() {
     if (vscode.workspace.workspaceFolders.length === 1) {
+      flag = true;
+      resultText = "";
+      L = 0;
+      L2 = 0;
+      progressFlag = true;
       basePath = vscode.workspace.workspaceFolders[0].uri.fsPath;
       getAllLength(basePath);
-      readDir(basePath);
+      vscode.window.withProgress(
+        {
+          location: vscode.ProgressLocation.Notification,
+          title: "正在查找!",
+          cancellable: true
+        },
+        (progress, token) => {
+          token.onCancellationRequested(() => {
+            progressFlag = false;
+          });
+          readDir(basePath);
+          var p = new Promise(resolve => {
+            let timer = setInterval(() => {
+              if (L2 < L) {
+                progress.report({ increment: (L2 / L) * 100, message: "searching..." });
+              } else {
+                clearInterval(timer);
+                resolve();
+              }
+            }, 100);
+          });
+          return p;
+        }
+      );
     } else {
       vscode.window.showErrorMessage("目前只支持工作区包含一个根文件夹!");
     }
