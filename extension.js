@@ -2,15 +2,41 @@ const fs = require("fs");
 const path = require("path");
 let basePath;
 const vscode = require("vscode");
+let filters = ["node_modules", ".git", ".vscode", ".gitignore", ".eslintrc", "package.json", "package-lock.json", "gulp.json", "webpack.config.js"];
+let staticsIn = [".html", ".vue", ".jsx", ".jsp", ".js", ".css", ".less", ".sass", ".less", ".scss"];
+let notStatics = [".html", ".vue", ".jsx", ".jsp"];
+function regFun(arr) {
+  let filterString1 = "";
+  for (let i = 0; i < arr.length; i++) {
+    filterString1 += arr[i] + "|";
+  }
+  filterString1 = filterString1.replace(/\./g, "\\.");
+  filterString1 = filterString1.substr(0, filterString1.length - 1);
+  return new RegExp(filterString1);
+}
+
+const reg1 = regFun(filters);
+const reg2 = regFun(staticsIn);
+const reg3 = regFun(notStatics);
 const fileFilter = function(ele) {
-  return ele.match(/node_modules|\.git|\.vscode|\.gitignore|\.eslintrc|package\.json|package-lock\.json|gulp\.js|webpack\.config\.js/);
+  return reg1.test(ele);
 };
+const staticsInFilter = function(ele) {
+  return reg2.test(ele);
+};
+const notStaticsFilter = function(ele) {
+  return reg3.test(ele);
+};
+/* const fileFilter = function(ele) {
+  return ele.match(/node_modules|\.git|\.vscode|\.gitignore|\.eslintrc|package\.json|package-lock\.json|gulp\.js|webpack\.config\.js/);
+}; */
 let flag = true,
   resultText = "",
   L = 0,
   L2 = 0,
   notiMsg = "",
-  progressFlag = true;
+  progressFlag = true,
+  fileContents = {};
 function findMatch(pa, fileName) {
   var menu = fs.readdirSync(pa);
   if (menu) {
@@ -23,14 +49,26 @@ function findMatch(pa, fileName) {
         if (fs.statSync(pathTemp).isDirectory()) {
           findMatch(pathTemp, fileName);
         } else {
-          if (!ele.match(/\.html|\.js|\.css|\.less|\.vue|\.jsx|\.sass|\.scss/)) {
+          if (new RegExp(pathTemp).test(resultText)) {
+            console.log(pathTemp);
+          }
+          if (!staticsInFilter(ele) || new RegExp(pathTemp).test(resultText)) {
             return;
           } else {
-            let fileContent = fs.readFileSync(pathTemp, "utf-8"); // 读取页面内容
-            var re = new RegExp("/" + fileName); // 文件名正则
-            if (fileContent.match(re)) {
-              flag = false;
-              return;
+            if (fileContents[pathTemp]) {
+              let re = new RegExp(fileName); // 文件名正则
+              if (re.test(fileContents[pathTemp])) {
+                flag = false;
+                return;
+              }
+            } else {
+              let fileContent = fs.readFileSync(pathTemp, "utf-8"); // 读取页面内容
+              fileContents[pathTemp] = fileContent;
+              let re = new RegExp(fileName); // 文件名正则
+              if (re.test(fileContent)) {
+                flag = false;
+                return;
+              }
             }
           }
         }
@@ -57,7 +95,7 @@ function readDir(pa) {
             // 文件夹则进入下一层
             readDir(fileNow);
           } else {
-            if (ele.match(/\.html|\.vue|\.jsx|\.jsp/)) {
+            if (notStaticsFilter(ele)) {
               return;
             } else {
               flag = true;
@@ -68,10 +106,12 @@ function readDir(pa) {
                 a.write(resultText) */
                 if (L2 === L) {
                   fs.writeFile(path.join(basePath, "unused.md"), resultText, function(err) {
-                    vscode.workspace.openTextDocument(path.join(basePath, "unused.md")).then(doc => vscode.window.showTextDocument(doc));
+                    vscode.workspace.openTextDocument(vscode.Uri.file(path.join(basePath, "unused.md"))).then(doc => vscode.window.showTextDocument(doc));
                     if (err) throw err;
                   });
                   vscode.window.showInformationMessage("请仔细核对unused.md中列出的文件，确认后执行删除命令。");
+                  console.log("end" + new Date().getTime());
+                  progressFlag = false;
                 }
               }
             }
@@ -84,8 +124,12 @@ function readDir(pa) {
 
 function getAllLength(pa) {
   var menu = fs.readdirSync(pa);
-  if (!menu) return;
+  if (!menu) {
+    // console.log("a" + new Date().getTime());
+    return;
+  }
   L += menu.length;
+  // console.log("a" + L + "-" + new Date().getTime());
   menu.forEach(ele => {
     if (fileFilter(ele)) {
       // 忽略的文件和文件夹
@@ -108,7 +152,9 @@ function activate(context) {
       L2 = 0;
       progressFlag = true;
       basePath = vscode.workspace.workspaceFolders[0].uri.fsPath;
+      console.log("start" + new Date().getTime());
       getAllLength(basePath);
+      // console.log("c" + new Date().getTime() + "a" + L);
       vscode.window.withProgress(
         {
           location: vscode.ProgressLocation.Notification,
@@ -116,13 +162,15 @@ function activate(context) {
           cancellable: true
         },
         (progress, token) => {
+          let timer;
           token.onCancellationRequested(() => {
             progressFlag = false;
+            clearInterval(timer);
           });
           readDir(basePath);
           var p = new Promise(resolve => {
-            let timer = setInterval(() => {
-              // console.log((L2 / L) * 100);
+            timer = setInterval(() => {
+              console.log((L2 / L) * 100);
               if (L2 < L) {
                 progress.report({ increment: (L2 / L) * 100, message: "searching..." });
               } else {
