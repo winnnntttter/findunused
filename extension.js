@@ -2,9 +2,9 @@ const fs = require("fs");
 const path = require("path");
 let basePath;
 const vscode = require("vscode");
-let filters = ["node_modules", ".git", ".vscode", ".gitignore", ".eslintrc", "package.json", "package-lock.json", "gulp.json", "webpack.config.js"];
-let staticsIn = [".html", ".vue", ".jsx", ".jsp", ".js", ".css", ".less", ".sass", ".less", ".scss"];
-let notStatics = [".html", ".vue", ".jsx", ".jsp"];
+let ignores = vscode.workspace.getConfiguration("findUnused")["ignores"];
+let staticsIn = vscode.workspace.getConfiguration("findUnused")["staticsIn"];
+let notStatics = vscode.workspace.getConfiguration("findUnused")["notStatics"];
 function regFun(arr) {
   let filterString1 = "";
   for (let i = 0; i < arr.length; i++) {
@@ -15,7 +15,7 @@ function regFun(arr) {
   return new RegExp(filterString1);
 }
 
-const reg1 = regFun(filters);
+const reg1 = regFun(ignores);
 const reg2 = regFun(staticsIn);
 const reg3 = regFun(notStatics);
 const fileFilter = function(ele) {
@@ -35,14 +35,14 @@ let resultText = "",
   L = 0,
   L2 = 0,
   // notiMsg = "",
-  // progressFlag = true,
-  staticFiles = {};
+  progressFlag = true,
+  staticFiles = [];
 let staticFileReg = /[\w-\.]+\.\w{1,6}/gm;
 
 function getAllLength(pa) {
   var menu = fs.readdirSync(pa);
   if (!menu) {
-    console.log("a" + new Date().getTime());
+    // console.log("a" + new Date().getTime());
     return;
   }
   // L += menu.length;
@@ -64,48 +64,59 @@ function getAllLength(pa) {
         }
         if (!notStaticsFilter(ele)) {
           L += 1;
-          staticFiles[ele] = pathTemp;
+          let obj = {};
+          obj.name = ele;
+          obj.path = pathTemp;
+          staticFiles.push(obj);
         }
       }
     }
   });
-  console.log(`L${L}`);
 }
 function getUnused() {
-  for (let i in staticFiles) {
-    let re = new RegExp(i); // 文件名正则
+  for (let i = 0, iL = staticFiles.length; i < iL; i++) {
+    L2 += 1;
+    let re = new RegExp(staticFiles[i].name); // 文件名正则
     if (!re.test(contentText)) {
-      resultText += "file:///" + staticFiles[i] + "\n";
-      L2 += 1;
+      resultText += "file:///" + staticFiles[i].path + "\n";
+    }
+    if (!progressFlag) {
+      break;
     }
   }
-  console.log(`L2${L2}`);
-  fs.writeFile(path.join(basePath, "unused.md"), resultText, function(err) {
-    vscode.workspace.openTextDocument(vscode.Uri.file(path.join(basePath, "unused.md"))).then(doc => vscode.window.showTextDocument(doc));
-    if (err) throw err;
-  });
-  vscode.window.showInformationMessage("请仔细核对unused.md中列出的文件，确认后执行删除命令。");
-  console.log("end" + new Date().getTime());
+  // console.log(`L2${L2}`);
+  if (progressFlag) {
+    if (resultText) {
+      fs.writeFile(path.join(basePath, "unused.md"), resultText, function(err) {
+        vscode.workspace.openTextDocument(vscode.Uri.file(path.join(basePath, "unused.md"))).then(doc => vscode.window.showTextDocument(doc));
+        if (err) throw err;
+      });
+      vscode.window.showInformationMessage("Please check the files in unused.md, delete the files you want to keep, then use command 'findUnused delete' to remove the rest.");
+    } else {
+      vscode.window.showInformationMessage("No unused files found.");
+    }
+  }
+  // console.log("end" + new Date().getTime());
 }
 
 function activate(context) {
   vscode.commands.registerCommand("findUnused.find", function() {
     if (vscode.workspace.workspaceFolders.length === 1) {
-      flag = true;
       resultText = "";
+      contentText = "";
+      staticFiles = [];
       L = 0;
       L2 = 0;
       progressFlag = true;
       basePath = vscode.workspace.workspaceFolders[0].uri.fsPath;
-      console.log("start" + new Date().getTime());
+      // console.log("start" + new Date().getTime());
       getAllLength(basePath);
-      console.log("c" + new Date().getTime() + "a" + L);
       getUnused();
-
-      /* vscode.window.withProgress(
+      // console.log("c" + new Date().getTime() + "a" + L);
+      vscode.window.withProgress(
         {
           location: vscode.ProgressLocation.Notification,
-          title: "正在查找!",
+          title: "searching...",
           cancellable: true
         },
         (progress, token) => {
@@ -114,13 +125,11 @@ function activate(context) {
             progressFlag = false;
             clearInterval(timer);
           });
-          // readDir(basePath);
-          // getUnused();
           var p = new Promise(resolve => {
             timer = setInterval(() => {
-              console.log((L2 / L) * 100);
+              // console.log((L2 / L) * 100);
               if (L2 < L) {
-                progress.report({ increment: (L2 / L) * 100, message: "searching..." });
+                progress.report({ increment: (L2 / L) * 100, message: `${((L2 / L) * 100).toFixed(2)}%` });
               } else {
                 clearInterval(timer);
                 resolve();
@@ -129,9 +138,9 @@ function activate(context) {
           });
           return p;
         }
-      ); */
+      );
     } else {
-      vscode.window.showErrorMessage("目前只支持工作区包含一个根文件夹!");
+      vscode.window.showErrorMessage("The extension only support one workspaceFolder for now.");
     }
   });
   vscode.commands.registerCommand("findUnused.delete", function() {
@@ -139,7 +148,7 @@ function activate(context) {
       basePath = vscode.workspace.workspaceFolders[0].uri.fsPath;
       fs.exists(path.join(basePath, "unused.md"), function(exists) {
         if (exists) {
-          vscode.window.showInputBox({ prompt: "Find Unused: 请输入'yes'以删除unused.md中查询到的无用文件。" }).then(function(text) {
+          vscode.window.showInputBox({ prompt: "Find Unused: Please enter 'yes' to delete file list in unused.md. (Please make a backup before you do this.)" }).then(function(text) {
             if (text === "yes") {
               let unusedFiles = path.join(basePath, "unused.md");
               let fileContentArr = fs
@@ -153,14 +162,15 @@ function activate(context) {
                   });
                 }
               });
+              vscode.window.showInformationMessage("Deleted all files in unused.md.");
             }
           });
         } else {
-          vscode.window.showErrorMessage("当前工作区根路径不存在unused.md!");
+          vscode.window.showErrorMessage("There is no file named unused.md!");
         }
       });
     } else {
-      vscode.window.showErrorMessage("目前只支持工作区包含一个根文件夹!");
+      vscode.window.showErrorMessage("The extension only support one workspaceFolder for now.");
     }
   });
 }

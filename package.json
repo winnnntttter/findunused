@@ -1,47 +1,95 @@
 {
-	"name": "find-unused",
-	"displayName": "Find Unused",
-	"description": "Find unused static resource, and delete them. ",
-	"publisher": "winnnntttter",
-	"version": "0.0.3",
-	"engines": {
-		"vscode": "^1.41.0"
-	},
-	"repository": {
-		"git": "https://github.com/winnnntttter/findunused"
-	},
-	"categories": [
-		"Other"
-	],
-	"activationEvents": [
+  "name": "find-unused",
+  "displayName": "Find Unused",
+  "description": "Find unused static resource, and delete them. ",
+  "publisher": "winnnntttter",
+  "version": "0.0.4",
+  "engines": {
+    "vscode": "^1.41.0"
+  },
+  "repository": {
+    "git": "https://github.com/winnnntttter/findunused"
+  },
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [
     "onCommand:findUnused.find",
     "onCommand:findUnused.delete"
   ],
-	"main": "./extension.js",
-	"contributes": {
-		"commands": [
-			{
-				"command": "findUnused.find",
-				"title": "findUnused find"
-			},
-			{
-				"command": "findUnused.delete",
-				"title": "findUnused delete"
-			}
-		]
-	},
-	"scripts": {
-		"test": "node ./test/runTest.js"
-	},
-	"devDependencies": {
-		"@types/glob": "^7.1.1",
-		"@types/mocha": "^5.2.7",
-		"@types/node": "^12.11.7",
-		"@types/vscode": "^1.41.0",
-		"eslint": "^6.6.0",
-		"glob": "^7.1.5",
-		"mocha": "^6.2.2",
-		"typescript": "^3.6.4",
-		"vscode-test": "^1.2.2"
-	}
+  "main": "./extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "findUnused.find",
+        "title": "findUnused find"
+      },
+      {
+        "command": "findUnused.delete",
+        "title": "findUnused delete"
+      }
+    ],
+    "configuration": {
+      "type": "object",
+      "title": "Find Unused configuration",
+      "properties": {
+        "findUnused.ignores": {
+          "type": "array",
+          "default": [
+            "node_modules",
+            ".git",
+            ".vscode",
+            ".gitignore",
+            ".eslintrc",
+            "package.json",
+            "package-lock.json",
+            "gulp.json",
+						"webpack.config.js",
+						"unused.md"
+          ],
+          "description": "The files and folders that you want to ignore when checking. The default is [\"node_modules\", \".git\", \".vscode\", \".gitignore\", \".eslintrc\", \"package.json\", \"package-lock.json\", \"gulp.json\", \"webpack.config.js\", \"unused.md\"], add more types you need."
+        },
+        "findUnused.staticsIn": {
+          "type": "array",
+          "default": [
+            ".html",
+            ".vue",
+            ".jsx",
+            ".jsp",
+            ".js",
+            ".css",
+            ".less",
+            ".sass",
+            ".less",
+            ".scss"
+          ],
+          "description": "The file types that the statics may in, the default is [\".html\", \".vue\", \".jsx\", \".jsp\", \".js\", \".css\", \".less\", \".sass\", \".less\", \".scss\"] add more types you need."
+        },
+        "findUnused.notStatics": {
+          "type": "array",
+          "default": [
+            ".html",
+            ".vue",
+            ".jsx",
+            ".jsp"
+          ],
+          "description": "The file types that is not a statics file, the default is [\".html\", \".vue\", \".jsx\", \".jsp\"] add more types you need."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "test": "node ./test/runTest.js"
+  },
+  "devDependencies": {
+    "@types/glob": "^7.1.1",
+    "@types/mocha": "^5.2.7",
+    "@types/node": "^12.11.7",
+    "@types/vscode": "^1.41.0",
+    "eslint": "^6.6.0",
+    "glob": "^7.1.5",
+    "mocha": "^6.2.2",
+    "typescript": "^3.6.4",
+    "vscode-test": "^1.2.2"
+  }
 }
