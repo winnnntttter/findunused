@@ -37,7 +37,8 @@ let flag = true,
   L2 = 0,
   // notiMsg = "",
   progressFlag = true,
-  fileContents = {};
+  fileContents = {},
+  staticFiles = {};
 let staticFileReg = /[\w-\.]+\.\w{1,6}/gm;
 function findMatch(pa, fileName) {
   var menu = fs.readdirSync(pa);
@@ -84,53 +85,46 @@ function findMatch(pa, fileName) {
   }
 }
 function readDir(pa) {
-  fs.readdir(pa, (err, menu) => {
-    if (!progressFlag) return;
-    if (err) throw err;
-    if (!menu) return;
-    menu.forEach(ele => {
-      L2 += 1;
-      notiMsg = path.join(pa, ele);
-      // console.log(L2, path.join(pa, ele));
-      let a = new Date().getTime();
-      if (fileFilter(ele)) {
-        return;
+  var menu = fs.readdirSync(pa);
+  if (!progressFlag) return;
+  if (!menu) return;
+  menu.forEach(ele => {
+    L2 += 1;
+    console.log(L2, path.join(pa, ele));
+    let a = new Date().getTime();
+    if (fileFilter(ele)) {
+      return;
+    } else {
+      let fileNow = path.join(pa, ele);
+      if (fs.statSync(fileNow).isDirectory()) {
+        let b = new Date().getTime();
+        if (b - a > 15000) {
+          console.log(b - a, fileNow);
+        }
+        readDir(fileNow);
       } else {
-        let fileNow = path.join(pa, ele);
-        fs.stat(fileNow, (err, info) => {
-          let b = new Date().getTime();
-          if (b - a > 15000) {
-            console.log(b - a, fileNow);
-          }
-          if (err) throw err;
-          if (info.isDirectory()) {
-            // 文件夹则进入下一层
-            readDir(fileNow);
-          } else {
-            if (notStaticsFilter(ele)) {
-              return;
-            } else {
-              flag = true;
-              findMatch(basePath, ele);
-              if (flag) {
-                resultText += "file:///" + fileNow + "\n";
-                /* var a= fs.createWriteStream(path.join(basePath,'output.txt'))
-                a.write(resultText) */
-                if (L2 === L) {
-                  fs.writeFile(path.join(basePath, "unused.md"), resultText, function(err) {
-                    vscode.workspace.openTextDocument(vscode.Uri.file(path.join(basePath, "unused.md"))).then(doc => vscode.window.showTextDocument(doc));
-                    if (err) throw err;
-                  });
-                  vscode.window.showInformationMessage("请仔细核对unused.md中列出的文件，确认后执行删除命令。");
-                  console.log("end" + new Date().getTime());
-                  progressFlag = false;
-                }
-              }
+        if (notStaticsFilter(ele)) {
+          return;
+        } else {
+          flag = true;
+          findMatch(basePath, ele);
+          if (flag) {
+            resultText += "file:///" + fileNow + "\n";
+            /* var a= fs.createWriteStream(path.join(basePath,'output.txt'))
+            a.write(resultText) */
+            if (L2 === L) {
+              fs.writeFile(path.join(basePath, "unused.md"), resultText, function(err) {
+                vscode.workspace.openTextDocument(vscode.Uri.file(path.join(basePath, "unused.md"))).then(doc => vscode.window.showTextDocument(doc));
+                if (err) throw err;
+              });
+              vscode.window.showInformationMessage("请仔细核对unused.md中列出的文件，确认后执行删除命令。");
+              console.log("end" + new Date().getTime());
+              progressFlag = false;
             }
           }
-        });
+        }
       }
-    });
+    }
   });
 }
 
@@ -148,17 +142,35 @@ function getAllLength(pa) {
       return;
     } else {
       let pathTemp = path.join(pa, ele);
-      if (staticsInFilter(ele)) {
-        let contentFiles = fs.readFileSync(pathTemp, "utf-8").match(staticFileReg);
-        if (contentFiles) {
-          contentText += contentFiles.join(";");
-        }
-      }
       if (fs.statSync(pathTemp).isDirectory()) {
         getAllLength(pathTemp);
+      } else {
+        if (staticsInFilter(ele)) {
+          let contentFiles = fs.readFileSync(pathTemp, "utf-8").match(staticFileReg);
+          if (contentFiles) {
+            contentText += contentFiles.join(";");
+          }
+        }
+        if (!notStaticsFilter(ele)) {
+          staticFiles[ele] = pathTemp;
+        }
       }
     }
   });
+}
+function getUnused() {
+  for (let i in staticFiles) {
+    let re = new RegExp(i); // 文件名正则
+    if (!re.test(contentText)) {
+      resultText += "file:///" + staticFiles[i] + "\n";
+    }
+  }
+  fs.writeFile(path.join(basePath, "unused.md"), resultText, function(err) {
+    vscode.workspace.openTextDocument(vscode.Uri.file(path.join(basePath, "unused.md"))).then(doc => vscode.window.showTextDocument(doc));
+    if (err) throw err;
+  });
+  vscode.window.showInformationMessage("请仔细核对unused.md中列出的文件，确认后执行删除命令。");
+  console.log("end" + new Date().getTime());
 }
 
 function activate(context) {
@@ -185,7 +197,8 @@ function activate(context) {
             progressFlag = false;
             clearInterval(timer);
           });
-          readDir(basePath);
+          // readDir(basePath);
+          getUnused();
           var p = new Promise(resolve => {
             timer = setInterval(() => {
               console.log((L2 / L) * 100);
