@@ -30,103 +30,14 @@ const notStaticsFilter = function(ele) {
 /* const fileFilter = function(ele) {
   return ele.match(/node_modules|\.git|\.vscode|\.gitignore|\.eslintrc|package\.json|package-lock\.json|gulp\.js|webpack\.config\.js/);
 }; */
-let flag = true,
-  resultText = "",
+let resultText = "",
   contentText = "",
   L = 0,
   L2 = 0,
   // notiMsg = "",
-  progressFlag = true,
-  fileContents = {},
+  // progressFlag = true,
   staticFiles = {};
 let staticFileReg = /[\w-\.]+\.\w{1,6}/gm;
-function findMatch(pa, fileName) {
-  var menu = fs.readdirSync(pa);
-  if (menu) {
-    menu.forEach(ele => {
-      if (fileFilter(ele)) {
-        // 忽略的文件和文件夹
-        return;
-      } else {
-        let pathTemp = path.join(pa, ele);
-        if (fs.statSync(pathTemp).isDirectory()) {
-          findMatch(pathTemp, fileName);
-        } else {
-          if (new RegExp(pathTemp).test(resultText)) {
-            console.log(pathTemp);
-          }
-          if (!staticsInFilter(ele) || new RegExp(pathTemp).test(resultText)) {
-            return;
-          } else {
-            /* if (fileContents[pathTemp]) {
-              let re = new RegExp(fileName); // 文件名正则
-              if (re.test(fileContents[pathTemp])) {
-                flag = false;
-                return;
-              }
-            } else {
-              let fileContent = fs.readFileSync(pathTemp, "utf-8"); // 读取页面内容
-              fileContents[pathTemp] = fileContent;
-              let re = new RegExp(fileName); // 文件名正则
-              if (re.test(fileContent)) {
-                flag = false;
-                return;
-              }
-            } */
-            let re = new RegExp(fileName); // 文件名正则
-            if (re.test(contentText)) {
-              flag = false;
-              return;
-            }
-          }
-        }
-      }
-    });
-  }
-}
-function readDir(pa) {
-  var menu = fs.readdirSync(pa);
-  if (!progressFlag) return;
-  if (!menu) return;
-  menu.forEach(ele => {
-    L2 += 1;
-    console.log(L2, path.join(pa, ele));
-    let a = new Date().getTime();
-    if (fileFilter(ele)) {
-      return;
-    } else {
-      let fileNow = path.join(pa, ele);
-      if (fs.statSync(fileNow).isDirectory()) {
-        let b = new Date().getTime();
-        if (b - a > 15000) {
-          console.log(b - a, fileNow);
-        }
-        readDir(fileNow);
-      } else {
-        if (notStaticsFilter(ele)) {
-          return;
-        } else {
-          flag = true;
-          findMatch(basePath, ele);
-          if (flag) {
-            resultText += "file:///" + fileNow + "\n";
-            /* var a= fs.createWriteStream(path.join(basePath,'output.txt'))
-            a.write(resultText) */
-            if (L2 === L) {
-              fs.writeFile(path.join(basePath, "unused.md"), resultText, function(err) {
-                vscode.workspace.openTextDocument(vscode.Uri.file(path.join(basePath, "unused.md"))).then(doc => vscode.window.showTextDocument(doc));
-                if (err) throw err;
-              });
-              vscode.window.showInformationMessage("请仔细核对unused.md中列出的文件，确认后执行删除命令。");
-              console.log("end" + new Date().getTime());
-              progressFlag = false;
-            }
-          }
-        }
-      }
-    }
-  });
-}
 
 function getAllLength(pa) {
   var menu = fs.readdirSync(pa);
@@ -134,7 +45,7 @@ function getAllLength(pa) {
     console.log("a" + new Date().getTime());
     return;
   }
-  L += menu.length;
+  // L += menu.length;
   // console.log("a" + L + "-" + new Date().getTime());
   menu.forEach(ele => {
     if (fileFilter(ele)) {
@@ -152,19 +63,23 @@ function getAllLength(pa) {
           }
         }
         if (!notStaticsFilter(ele)) {
+          L += 1;
           staticFiles[ele] = pathTemp;
         }
       }
     }
   });
+  console.log(`L${L}`);
 }
 function getUnused() {
   for (let i in staticFiles) {
     let re = new RegExp(i); // 文件名正则
     if (!re.test(contentText)) {
       resultText += "file:///" + staticFiles[i] + "\n";
+      L2 += 1;
     }
   }
+  console.log(`L2${L2}`);
   fs.writeFile(path.join(basePath, "unused.md"), resultText, function(err) {
     vscode.workspace.openTextDocument(vscode.Uri.file(path.join(basePath, "unused.md"))).then(doc => vscode.window.showTextDocument(doc));
     if (err) throw err;
@@ -185,7 +100,9 @@ function activate(context) {
       console.log("start" + new Date().getTime());
       getAllLength(basePath);
       console.log("c" + new Date().getTime() + "a" + L);
-      vscode.window.withProgress(
+      getUnused();
+
+      /* vscode.window.withProgress(
         {
           location: vscode.ProgressLocation.Notification,
           title: "正在查找!",
@@ -198,7 +115,7 @@ function activate(context) {
             clearInterval(timer);
           });
           // readDir(basePath);
-          getUnused();
+          // getUnused();
           var p = new Promise(resolve => {
             timer = setInterval(() => {
               console.log((L2 / L) * 100);
@@ -212,7 +129,7 @@ function activate(context) {
           });
           return p;
         }
-      );
+      ); */
     } else {
       vscode.window.showErrorMessage("目前只支持工作区包含一个根文件夹!");
     }
