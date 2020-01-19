@@ -32,11 +32,13 @@ const notStaticsFilter = function(ele) {
 }; */
 let flag = true,
   resultText = "",
+  contentText = "",
   L = 0,
   L2 = 0,
-  notiMsg = "",
+  // notiMsg = "",
   progressFlag = true,
   fileContents = {};
+let staticFileReg = /[\w-\.]+\.\w{1,6}/gm;
 function findMatch(pa, fileName) {
   var menu = fs.readdirSync(pa);
   if (menu) {
@@ -55,7 +57,7 @@ function findMatch(pa, fileName) {
           if (!staticsInFilter(ele) || new RegExp(pathTemp).test(resultText)) {
             return;
           } else {
-            if (fileContents[pathTemp]) {
+            /* if (fileContents[pathTemp]) {
               let re = new RegExp(fileName); // 文件名正则
               if (re.test(fileContents[pathTemp])) {
                 flag = false;
@@ -69,6 +71,11 @@ function findMatch(pa, fileName) {
                 flag = false;
                 return;
               }
+            } */
+            let re = new RegExp(fileName); // 文件名正则
+            if (re.test(contentText)) {
+              flag = false;
+              return;
             }
           }
         }
@@ -85,11 +92,16 @@ function readDir(pa) {
       L2 += 1;
       notiMsg = path.join(pa, ele);
       // console.log(L2, path.join(pa, ele));
+      let a = new Date().getTime();
       if (fileFilter(ele)) {
         return;
       } else {
         let fileNow = path.join(pa, ele);
         fs.stat(fileNow, (err, info) => {
+          let b = new Date().getTime();
+          if (b - a > 15000) {
+            console.log(b - a, fileNow);
+          }
           if (err) throw err;
           if (info.isDirectory()) {
             // 文件夹则进入下一层
@@ -125,7 +137,7 @@ function readDir(pa) {
 function getAllLength(pa) {
   var menu = fs.readdirSync(pa);
   if (!menu) {
-    // console.log("a" + new Date().getTime());
+    console.log("a" + new Date().getTime());
     return;
   }
   L += menu.length;
@@ -136,6 +148,12 @@ function getAllLength(pa) {
       return;
     } else {
       let pathTemp = path.join(pa, ele);
+      if (staticsInFilter(ele)) {
+        let contentFiles = fs.readFileSync(pathTemp, "utf-8").match(staticFileReg);
+        if (contentFiles) {
+          contentText += contentFiles.join(";");
+        }
+      }
       if (fs.statSync(pathTemp).isDirectory()) {
         getAllLength(pathTemp);
       }
@@ -154,7 +172,7 @@ function activate(context) {
       basePath = vscode.workspace.workspaceFolders[0].uri.fsPath;
       console.log("start" + new Date().getTime());
       getAllLength(basePath);
-      // console.log("c" + new Date().getTime() + "a" + L);
+      console.log("c" + new Date().getTime() + "a" + L);
       vscode.window.withProgress(
         {
           location: vscode.ProgressLocation.Notification,
