@@ -5,6 +5,7 @@ const vscode = require("vscode");
 let ignores = vscode.workspace.getConfiguration("findUnused")["ignores"];
 let staticsIn = vscode.workspace.getConfiguration("findUnused")["staticsIn"];
 let notStatics = vscode.workspace.getConfiguration("findUnused")["notStatics"];
+// const dir = require("node-dir");
 function regFun(arr) {
   let filterString1 = "";
   for (let i = 0; i < arr.length; i++) {
@@ -38,42 +39,46 @@ let resultText = "",
   progressFlag = true,
   staticFiles = [];
 let staticFileReg = /[\w-\.]+\.\w{1,6}/gm;
-
-function getAllLength(pa) {
-  var menu = fs.readdirSync(pa);
+function getAllLength(pa, progress, token) {
+  fs.readdir(pa, (err, menu) => {
+    if (!progressFlag) return;
+    if (err) throw err;
+    if (!menu) return;
+    menu.forEach(ele => {
+      if (fileFilter(ele)) {
+        // 忽略的文件和文件夹
+        return;
+      } else {
+        let pathTemp = path.join(pa, ele);
+        if (fs.statSync(pathTemp).isDirectory()) {
+          getAllLength(pathTemp, progress, token);
+        } else {
+          if (staticsInFilter(ele)) {
+            let contentFiles = fs.readFileSync(pathTemp, "utf-8").match(staticFileReg);
+            if (contentFiles) {
+              contentText += contentFiles.join(";");
+            }
+          }
+          if (!notStaticsFilter(ele)) {
+            L += 1;
+            let obj = {};
+            obj.name = ele;
+            obj.path = pathTemp;
+            staticFiles.push(obj);
+          }
+        }
+      }
+    });
+  });
+  /* var menu = fs.readdirSync(pa);
   if (!menu) {
     // console.log("a" + new Date().getTime());
     return;
   }
   // L += menu.length;
-  // console.log("a" + L + "-" + new Date().getTime());
-  menu.forEach(ele => {
-    if (fileFilter(ele)) {
-      // 忽略的文件和文件夹
-      return;
-    } else {
-      let pathTemp = path.join(pa, ele);
-      if (fs.statSync(pathTemp).isDirectory()) {
-        getAllLength(pathTemp);
-      } else {
-        if (staticsInFilter(ele)) {
-          let contentFiles = fs.readFileSync(pathTemp, "utf-8").match(staticFileReg);
-          if (contentFiles) {
-            contentText += contentFiles.join(";");
-          }
-        }
-        if (!notStaticsFilter(ele)) {
-          L += 1;
-          let obj = {};
-          obj.name = ele;
-          obj.path = pathTemp;
-          staticFiles.push(obj);
-        }
-      }
-    }
-  });
+  // console.log("a" + L + "-" + new Date().getTime()); */
 }
-function getUnused() {
+function getUnused(progress, token) {
   for (let i = 0, iL = staticFiles.length; i < iL; i++) {
     L2 += 1;
     let re = new RegExp(staticFiles[i].name); // 文件名正则
@@ -99,8 +104,150 @@ function getUnused() {
   // console.log("end" + new Date().getTime());
 }
 
+function executeSearch(basePath, progress, token) {
+  return new Promise(resolve => {
+    var progressUpdate = "Starting up...";
+    // const interval = setInterval(() => progress.report({ message: progressUpdate }), 100);
+    // getAllLength(basePath, progress, token);
+    readFiles(
+      basePath,
+      function(err, content, next) {
+        if (err) throw err;
+        if (content) {
+          let contentFiles = content.match(staticFileReg);
+          if (contentFiles) {
+            contentText += contentFiles.join(";");
+          }
+        }
+        next();
+      },
+      function(err, files) {
+        if (err) throw err;
+        console.log("finished reading files:", files[0]);
+        getUnused(progress, token);
+      }
+    );
+
+    token.onCancellationRequested(() => {
+      progressFlag = false;
+    });
+  });
+}
+function extend(target, source, modify) {
+  var result = target ? (modify ? target : extend({}, target, true)) : {};
+  if (!source) return result;
+  for (var key in source) {
+    if (source.hasOwnProperty(key) && source[key] !== undefined) {
+      result[key] = source[key];
+    }
+  }
+  return result;
+}
+function matches(str, match) {
+  if (Array.isArray(match)) return match.indexOf(str) > -1;
+  return match.test(str);
+}
+function readFiles(dir, options, callback, complete) {
+  if (typeof options === "function") {
+    complete = callback;
+    callback = options;
+    options = {};
+  }
+  if (typeof options === "string") {
+    options = {
+      encoding: options
+    };
+  }
+  options = extend(
+    {
+      recursive: true,
+      encoding: "utf8",
+      doneOnErr: true
+    },
+    options
+  );
+  let files = [];
+
+  let done = function(err) {
+    if (typeof complete === "function") {
+      if (err) return complete(err);
+      complete(null, files);
+    }
+  };
+
+  fs.readdir(dir, function(err, list) {
+    if (err) {
+      if (options.doneOnErr === true) {
+        if (err.code === "EACCES") return done();
+        return done(err);
+      }
+    }
+    var i = 0;
+
+    if (options.reverse === true || (typeof options.sort === "string" && /reverse|desc/i.test(options.sort))) {
+      list = list.reverse();
+    } else if (options.sort !== false) {
+      list = list.sort();
+    }
+
+    (function next() {
+      var filename = list[i++];
+      if (!filename) return done(null, files);
+      var file = path.join(dir, filename);
+      fs.stat(file, function(err, stat) {
+        if (err && options.doneOnErr === true) return done(err);
+        if (stat && stat.isDirectory()) {
+          if (options.recursive) {
+            if (options.matchDir && !matches(filename, options.matchDir)) return next();
+            if (options.excludeDir && matches(filename, options.excludeDir)) return next();
+            readFiles(file, options, callback, function(err, sfiles) {
+              if (err && options.doneOnErr === true) return done(err);
+              files = files.concat(sfiles);
+              next();
+            });
+          } else {
+            next();
+          }
+        } else if (stat && stat.isFile()) {
+          if (options.match && !matches(filename, options.match)) return next();
+          if (options.exclude && matches(filename, options.exclude)) return next();
+          if (options.filter && !options.filter(filename)) return next();
+          if (options.shortName) files.push(filename);
+          else files.push(file);
+          if (staticsInFilter(filename)) {
+            fs.readFile(file, options.encoding, function(err, data) {
+              if (err) {
+                if (err.code === "EACCES") return next();
+                if (options.doneOnErr === true) {
+                  return done(err);
+                }
+              }
+              if (callback.length > 3) {
+                if (options.shortName) callback(null, data, filename, next);
+                else callback(null, data, file, next);
+              } else {
+                callback(null, data, next);
+              }
+            });
+          } else {
+            callback(null, false, next);
+          }
+          if (!notStaticsFilter(filename)) {
+            L += 1;
+            let obj = {};
+            obj.name = filename;
+            obj.path = file;
+            staticFiles.push(obj);
+          }
+        } else {
+          next();
+        }
+      });
+    })();
+  });
+}
 function activate(context) {
-  vscode.commands.registerCommand("findUnused.find", function() {
+  vscode.commands.registerCommand("findUnused.find", () => {
     if (vscode.workspace.workspaceFolders.length === 1) {
       resultText = "";
       contentText = "";
@@ -110,8 +257,8 @@ function activate(context) {
       progressFlag = true;
       basePath = vscode.workspace.workspaceFolders[0].uri.fsPath;
       // console.log("start" + new Date().getTime());
-      getAllLength(basePath);
-      getUnused();
+      // getAllLength(basePath);
+      // getUnused();
       // console.log("c" + new Date().getTime() + "a" + L);
       vscode.window.withProgress(
         {
@@ -123,9 +270,9 @@ function activate(context) {
           let timer;
           token.onCancellationRequested(() => {
             progressFlag = false;
-            clearInterval(timer);
+            // clearInterval(timer);
           });
-          var p = new Promise(resolve => {
+          /* var p = new Promise(resolve => {
             timer = setInterval(() => {
               // console.log((L2 / L) * 100);
               if (L2 < L) {
@@ -136,7 +283,8 @@ function activate(context) {
               }
             }, 100);
           });
-          return p;
+          return p; */
+          return executeSearch(basePath, progress, token);
         }
       );
     } else {
@@ -174,6 +322,7 @@ function activate(context) {
     }
   });
 }
+
 exports.activate = activate;
 
 function deactivate() {}

@@ -44,8 +44,8 @@
             "package.json",
             "package-lock.json",
             "gulp.json",
-						"webpack.config.js",
-						"unused.md"
+            "webpack.config.js",
+            "unused.md"
           ],
           "description": "The files and folders that you want to ignore when checking. The default is [\"node_modules\", \".git\", \".vscode\", \".gitignore\", \".eslintrc\", \"package.json\", \"package-lock.json\", \"gulp.json\", \"webpack.config.js\", \"unused.md\"], add more types you need."
         },
@@ -91,5 +91,8 @@
     "mocha": "^6.2.2",
     "typescript": "^3.6.4",
     "vscode-test": "^1.2.2"
+  },
+  "dependencies": {
+    "node-dir": "^0.1.17"
   }
 }
