@@ -58,6 +58,7 @@ function getUnused(progress, token, resolve) {
     if (resultText) {
       fs.writeFile(path.join(basePath, "unused.md"), resultText, function(err) {
         vscode.workspace.openTextDocument(vscode.Uri.file(path.join(basePath, "unused.md"))).then(doc => vscode.window.showTextDocument(doc));
+        // console.log("end" + new Date().getTime());
         if (err) throw err;
       });
       vscode.window.showInformationMessage("Please check the files in unused.md, delete the files you want to keep, then use command 'findUnused delete' to remove the rest.");
@@ -198,6 +199,12 @@ function readFiles(dir, options, callback, complete) {
           if (options.filter && !options.filter(filename)) return next();
           if (options.shortName) files.push(filename);
           else files.push(file);
+          if (!notStaticsFilter(filename)) {
+            let obj = {};
+            obj.name = filename;
+            obj.path = file;
+            staticFiles.push(obj);
+          }
           if (staticsInFilter(filename)) {
             progressUpdate = file;
             fs.readFile(file, options.encoding, function(err, data) {
@@ -216,12 +223,6 @@ function readFiles(dir, options, callback, complete) {
             });
           } else {
             callback(null, false, next);
-          }
-          if (!notStaticsFilter(filename)) {
-            let obj = {};
-            obj.name = filename;
-            obj.path = file;
-            staticFiles.push(obj);
           }
         } else {
           next();
