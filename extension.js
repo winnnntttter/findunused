@@ -42,9 +42,10 @@ let resultText = "",
   count = 0,
   countFlag = true,
   outList = [];
-let staticFileReg = /[\w-\.]+\.\w{1,6}/gm;
+let staticFileReg = /[\w-\.]+\.[a-zA-Z]{2,4}\W/gm;
 
 function getUnused(progress, token, resolve) {
+  console.log(contentText.length);
   for (let i = 0, iL = staticFiles.length; i < iL; i++) {
     let re = new RegExp(staticFiles[i].name); // 文件名正则
     if (!re.test(contentText)) {
@@ -58,7 +59,7 @@ function getUnused(progress, token, resolve) {
     if (resultText) {
       fs.writeFile(path.join(basePath, "unused.md"), resultText, function(err) {
         vscode.workspace.openTextDocument(vscode.Uri.file(path.join(basePath, "unused.md"))).then(doc => vscode.window.showTextDocument(doc));
-        // console.log("end" + new Date().getTime());
+        console.log("end" + new Date().getTime());
         if (err) throw err;
       });
       vscode.window.showInformationMessage("Please check the files in unused.md, delete the files you want to keep, then use command 'findUnused delete' to remove the rest.");
@@ -87,7 +88,7 @@ function executeSearch(basePath, progress, token) {
         if (content) {
           let contentFiles = content.match(staticFileReg);
           if (contentFiles) {
-            contentText += contentFiles.join(";");
+            contentText += contentFiles.join("");
           }
         }
         next();
@@ -245,7 +246,7 @@ function activate(context) {
       countFlag = true;
       outList = [];
       basePath = vscode.workspace.workspaceFolders[0].uri.fsPath;
-      // console.log("start" + new Date().getTime());
+      console.log("start" + new Date().getTime());
       // getAllLength(basePath);
       // getUnused();
       // console.log("c" + new Date().getTime() + "a" + L);
