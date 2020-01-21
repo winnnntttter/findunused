@@ -19,9 +19,9 @@ function regFun(arr) {
 const reg1 = regFun(ignores);
 const reg2 = regFun(staticsIn);
 const reg3 = regFun(notStatics);
-const fileFilter = function(ele) {
+/* const fileFilter = function(ele) {
   return reg1.test(ele);
-};
+}; */
 const staticsInFilter = function(ele) {
   return reg2.test(ele);
 };
@@ -33,54 +33,19 @@ const notStaticsFilter = function(ele) {
 }; */
 let resultText = "",
   contentText = "",
-  L = 0,
-  L2 = 0,
   // notiMsg = "",
   progressFlag = true,
-  staticFiles = [];
+  staticFiles = [],
+  progressUpdate = "Starting up...",
+  step = 0,
+  listCount = 1,
+  count = 0,
+  countFlag = true,
+  outList = [];
 let staticFileReg = /[\w-\.]+\.\w{1,6}/gm;
-function getAllLength(pa, progress, token) {
-  fs.readdir(pa, (err, menu) => {
-    if (!progressFlag) return;
-    if (err) throw err;
-    if (!menu) return;
-    menu.forEach(ele => {
-      if (fileFilter(ele)) {
-        // 忽略的文件和文件夹
-        return;
-      } else {
-        let pathTemp = path.join(pa, ele);
-        if (fs.statSync(pathTemp).isDirectory()) {
-          getAllLength(pathTemp, progress, token);
-        } else {
-          if (staticsInFilter(ele)) {
-            let contentFiles = fs.readFileSync(pathTemp, "utf-8").match(staticFileReg);
-            if (contentFiles) {
-              contentText += contentFiles.join(";");
-            }
-          }
-          if (!notStaticsFilter(ele)) {
-            L += 1;
-            let obj = {};
-            obj.name = ele;
-            obj.path = pathTemp;
-            staticFiles.push(obj);
-          }
-        }
-      }
-    });
-  });
-  /* var menu = fs.readdirSync(pa);
-  if (!menu) {
-    // console.log("a" + new Date().getTime());
-    return;
-  }
-  // L += menu.length;
-  // console.log("a" + L + "-" + new Date().getTime()); */
-}
-function getUnused(progress, token) {
+
+function getUnused(progress, token, resolve) {
   for (let i = 0, iL = staticFiles.length; i < iL; i++) {
-    L2 += 1;
     let re = new RegExp(staticFiles[i].name); // 文件名正则
     if (!re.test(contentText)) {
       resultText += "file:///" + staticFiles[i].path + "\n";
@@ -89,7 +54,6 @@ function getUnused(progress, token) {
       break;
     }
   }
-  // console.log(`L2${L2}`);
   if (progressFlag) {
     if (resultText) {
       fs.writeFile(path.join(basePath, "unused.md"), resultText, function(err) {
@@ -101,16 +65,22 @@ function getUnused(progress, token) {
       vscode.window.showInformationMessage("No unused files found.");
     }
   }
+  resolve();
+
   // console.log("end" + new Date().getTime());
 }
 
 function executeSearch(basePath, progress, token) {
   return new Promise(resolve => {
-    var progressUpdate = "Starting up...";
-    // const interval = setInterval(() => progress.report({ message: progressUpdate }), 100);
+    // var progressUpdate = "Starting up...";
+    let interval = setInterval(() => progress.report({ increment: step, message: progressUpdate }), 200);
     // getAllLength(basePath, progress, token);
     readFiles(
       basePath,
+      {
+        excludeDir: reg1,
+        exclude: reg1
+      },
       function(err, content, next) {
         if (err) throw err;
         if (content) {
@@ -123,13 +93,15 @@ function executeSearch(basePath, progress, token) {
       },
       function(err, files) {
         if (err) throw err;
-        console.log("finished reading files:", files[0]);
-        getUnused(progress, token);
+        // console.log("finished reading files:", files[0]);
+        getUnused(progress, token, resolve);
       }
     );
 
     token.onCancellationRequested(() => {
       progressFlag = false;
+      clearInterval(interval);
+      resolve();
     });
   });
 }
@@ -137,7 +109,7 @@ function extend(target, source, modify) {
   var result = target ? (modify ? target : extend({}, target, true)) : {};
   if (!source) return result;
   for (var key in source) {
-    if (source.hasOwnProperty(key) && source[key] !== undefined) {
+    if (source.hasOwnProperty(key) && source[key]) {
       result[key] = source[key];
     }
   }
@@ -174,7 +146,7 @@ function readFiles(dir, options, callback, complete) {
       complete(null, files);
     }
   };
-
+  if (!progressFlag) return done("已取消");
   fs.readdir(dir, function(err, list) {
     if (err) {
       if (options.doneOnErr === true) {
@@ -182,6 +154,12 @@ function readFiles(dir, options, callback, complete) {
         return done(err);
       }
     }
+    if (countFlag) {
+      countFlag = false;
+      listCount = list.length;
+      outList = list;
+    }
+
     var i = 0;
 
     if (options.reverse === true || (typeof options.sort === "string" && /reverse|desc/i.test(options.sort))) {
@@ -191,8 +169,14 @@ function readFiles(dir, options, callback, complete) {
     }
 
     (function next() {
+      if (!progressFlag) return done("已取消");
       var filename = list[i++];
       if (!filename) return done(null, files);
+      if (outList[outList.length - 1] === list[outList.length - 1]) {
+        count += 1;
+        step = parseFloat((count / listCount) * 10);
+        // console.log(step);
+      }
       var file = path.join(dir, filename);
       fs.stat(file, function(err, stat) {
         if (err && options.doneOnErr === true) return done(err);
@@ -215,6 +199,7 @@ function readFiles(dir, options, callback, complete) {
           if (options.shortName) files.push(filename);
           else files.push(file);
           if (staticsInFilter(filename)) {
+            progressUpdate = file;
             fs.readFile(file, options.encoding, function(err, data) {
               if (err) {
                 if (err.code === "EACCES") return next();
@@ -233,7 +218,6 @@ function readFiles(dir, options, callback, complete) {
             callback(null, false, next);
           }
           if (!notStaticsFilter(filename)) {
-            L += 1;
             let obj = {};
             obj.name = filename;
             obj.path = file;
@@ -247,14 +231,18 @@ function readFiles(dir, options, callback, complete) {
   });
 }
 function activate(context) {
-  vscode.commands.registerCommand("findUnused.find", () => {
+  vscode.commands.registerCommand("findUnused.find", async () => {
     if (vscode.workspace.workspaceFolders.length === 1) {
       resultText = "";
       contentText = "";
-      staticFiles = [];
-      L = 0;
-      L2 = 0;
       progressFlag = true;
+      staticFiles = [];
+      progressUpdate = "Starting up...";
+      step = 0;
+      listCount = 1;
+      count = 0;
+      countFlag = true;
+      outList = [];
       basePath = vscode.workspace.workspaceFolders[0].uri.fsPath;
       // console.log("start" + new Date().getTime());
       // getAllLength(basePath);
@@ -266,12 +254,11 @@ function activate(context) {
           title: "searching...",
           cancellable: true
         },
-        (progress, token) => {
-          let timer;
-          token.onCancellationRequested(() => {
+        async (progress, token) => {
+          /* token.onCancellationRequested(() => {
             progressFlag = false;
             // clearInterval(timer);
-          });
+          }); */
           /* var p = new Promise(resolve => {
             timer = setInterval(() => {
               // console.log((L2 / L) * 100);
